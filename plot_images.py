@@ -34,7 +34,7 @@ def draw(input_file_name, height,
          absorption_image,
          differential_phase_image,
          dark_field_image,
-         language="it"):
+         language="it", batch=True):
     """Display the calculated images with matplotlib."""
     if language == "it":
         absorption_image_title = "assorbimento"
@@ -47,7 +47,7 @@ def draw(input_file_name, height,
     _, ((abs1_plot, abs2_plot),
         (phase1_plot, phase2_plot),
         (df1_plot, df2_plot)) = plt.subplots(
-        3, 2, figsize=(6, height), dpi=300)
+            3, 2, figsize=(6, height), dpi=300)
     plt.subplots_adjust(
         wspace=0.02,
         hspace=0.02)
@@ -64,11 +64,10 @@ def draw(input_file_name, height,
         max_y - min_y,
         fill=False,
         edgecolor="r"))
-    diff_image = np.diff(absorption_image[min_y:max_y, min_x:max_x])
     abs2 = abs2_plot.imshow(
-        diff_image,
+        absorption_image[min_y:max_y, min_x:max_x],
         cmap=plt.cm.Greys, aspect='auto')
-    abs1_plot.set_ylabel(absorption_image_title + "\n(differential)",
+    abs1_plot.set_ylabel(absorption_image_title,
                          size="large")
     abs1_plot.set_frame_on(False)
     abs1_plot.axes.yaxis.set_ticks([])
@@ -78,16 +77,18 @@ def draw(input_file_name, height,
     for pos in ["top", "bottom", "left", "right"]:
         abs2_plot.spines[pos].set_color("r")
     abs2_plot.axes.xaxis.set_ticks([])
-    diff_limits = stats.mstats.mquantiles(diff_image,
-                                          prob=[0.02, 0.98])
-    abs2.set_clim(*diff_limits)
-    plt.colorbar(abs2,
-                 ax=abs2_plot,
-                 format="% .2f",
-                 ticks=np.arange(-0.04, 0.04, 0.01).tolist())
+    limits = stats.mstats.mquantiles(
+        absorption_image,
+        prob=[0.02, 0.98])
     limits = stats.mstats.mquantiles(absorption_image,
                                      prob=[0.02, 0.98])
     abs1.set_clim(*limits)
+    abs2.set_clim(*limits)
+    print(limits)
+    plt.colorbar(abs2,
+                 ax=abs2_plot,
+                 format="% .2f",
+                 ticks=np.arange(0, 1, 0.1).tolist())
     phase1 = phase1_plot.imshow(differential_phase_image)
     phase1_plot.add_patch(mpl.patches.Rectangle(
         (min_x, min_y),
@@ -146,6 +147,11 @@ def draw(input_file_name, height,
     plt.savefig('images_{0}.eps'.format(
         os.path.splitext(os.path.basename(input_file_name))[0]),
         bbox_inches="tight", dpi=300)
+    if not batch:
+        plt.ion()
+        plt.show()
+        input("Press ENTER to quit...")
+
 
 if __name__ == '__main__':
     import argparse
@@ -159,25 +165,29 @@ if __name__ == '__main__':
                                     nargs=1,
                                     help="input file name")
     commandline_parser.add_argument("height",
-                                    nargs=1,
+                                    nargs="?",
+                                    default=6,
                                     type=float,
                                     help="height of the plot")
+    commandline_parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="run in batch mode, no picture is shown")
     args = commandline_parser.parse_args()
     input_file_name = args.file[0]
-    height = args.height[0]
+    height = args.height
 
     if not os.path.exists(input_file_name):
         raise(OSError("{0} not found".format(input_file_name)))
 
     input_file = h5py.File(input_file_name, "r")
-    absorption_image_name = "postprocessing/absorption"
-    differential_phase_image_name = "postprocessing/differential_phase"
-    visibility_reduction_image_name = "postprocessing/visibility_reduction"
+    dataset_name = "postprocessing/dpc_reconstruction"
+    dataset = input_file[dataset_name][0, ...]
 
-    absorption_image = input_file[absorption_image_name]
-    differential_phase_image = input_file[differential_phase_image_name]
-    visibility_reduction_image = input_file[visibility_reduction_image_name]
+    absorption_image = dataset[..., 0]
+    differential_phase_image = dataset[..., 1]
+    visibility_reduction_image = dataset[..., 2]
 
     draw(input_file_name, height, absorption_image,
          differential_phase_image, visibility_reduction_image,
-         args.language)
+         args.language, args.batch)
