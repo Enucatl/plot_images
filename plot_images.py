@@ -34,7 +34,7 @@ def draw(input_file_name, height,
          absorption_image,
          differential_phase_image,
          dark_field_image,
-         language="it", batch=True):
+         language="it", batch=True, magnified_square=[300, 550, 60, 130]):
     """Display the calculated images with matplotlib."""
     if language == "it":
         absorption_image_title = "assorbimento"
@@ -51,10 +51,7 @@ def draw(input_file_name, height,
     plt.subplots_adjust(
         wspace=0.02,
         hspace=0.02)
-    min_x = 300
-    max_x = 550
-    min_y = 60
-    max_y = 130
+    min_x, max_x, min_y, max_y = magnified_square
     abs1 = abs1_plot.imshow(absorption_image,
                             cmap=plt.cm.Greys,
                             aspect='auto')
@@ -89,7 +86,7 @@ def draw(input_file_name, height,
                  ax=abs2_plot,
                  format="% .2f",
                  ticks=np.arange(0, 1, 0.1).tolist())
-    phase1 = phase1_plot.imshow(differential_phase_image)
+    phase1 = phase1_plot.imshow(differential_phase_image, aspect='auto')
     phase1_plot.add_patch(mpl.patches.Rectangle(
         (min_x, min_y),
         max_x - min_x,
@@ -97,7 +94,7 @@ def draw(input_file_name, height,
         fill=False,
         edgecolor="r"))
     phase2 = phase2_plot.imshow(
-        differential_phase_image[min_y:max_y, min_x:max_x])
+        differential_phase_image[min_y:max_y, min_x:max_x], aspect='auto')
     limits = stats.mstats.mquantiles(differential_phase_image,
                                      prob=[0.02, 0.98])
     #limits = (-3, 3)
@@ -117,7 +114,7 @@ def draw(input_file_name, height,
                  ticks=np.arange(-0.4, 0.4, 0.1).tolist())
     phase1.set_clim(*limits)
     phase2.set_clim(*limits)
-    df1 = df1_plot.imshow(dark_field_image)
+    df1 = df1_plot.imshow(dark_field_image, aspect='auto')
     df1_plot.add_patch(mpl.patches.Rectangle(
         (min_x, min_y),
         max_x - min_x,
@@ -125,7 +122,7 @@ def draw(input_file_name, height,
         fill=False,
         edgecolor="r"))
     df2 = df2_plot.imshow(
-        dark_field_image[min_y:max_y, min_x:max_x])
+        dark_field_image[min_y:max_y, min_x:max_x], aspect='auto')
     df1_plot.set_ylabel(dark_field_image_title,
                         size="large")
     df1_plot.set_frame_on(False)
@@ -157,18 +154,33 @@ if __name__ == '__main__':
     import argparse
     commandline_parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    commandline_parser.add_argument("--language",
-                                    default="it",
-                                    choices=["it", "en"],
-                                    help="language for the text")
-    commandline_parser.add_argument("file",
-                                    nargs=1,
-                                    help="input file name")
-    commandline_parser.add_argument("height",
-                                    nargs="?",
-                                    default=6,
-                                    type=float,
-                                    help="height of the plot")
+    commandline_parser.add_argument(
+        "--language",
+        default="it",
+        choices=["it", "en"],
+        help="language for the text")
+    commandline_parser.add_argument(
+        "file",
+        nargs=1,
+        help="input file name")
+    commandline_parser.add_argument(
+        "height",
+        nargs="?",
+        default=6,
+        type=float,
+        help="height of the plot")
+    commandline_parser.add_argument(
+        "--small_crop",
+        nargs="*",
+        default=[300, 550, 60, 130],
+        type=int,
+        help="area inside the red rectangle (min_x, max_x, min_y, max_y)")
+    commandline_parser.add_argument(
+        "--big_crop",
+        nargs="*",
+        default=[0, -1, 0, -1],
+        type=int,
+        help="area inside the plot (min_x, max_x, min_y, max_y)")
     commandline_parser.add_argument(
         "--batch",
         action="store_true",
@@ -182,12 +194,13 @@ if __name__ == '__main__':
 
     input_file = h5py.File(input_file_name, "r")
     dataset_name = "postprocessing/dpc_reconstruction"
-    dataset = input_file[dataset_name][0, ...]
-
+    min_x, max_x, min_y, max_y = args.big_crop
+    dataset = input_file[dataset_name][0, min_y:max_y, min_x:max_x, ...]
+    print(dataset.shape)
     absorption_image = dataset[..., 0]
     differential_phase_image = dataset[..., 1]
     visibility_reduction_image = dataset[..., 2]
 
     draw(input_file_name, height, absorption_image,
          differential_phase_image, visibility_reduction_image,
-         args.language, args.batch)
+         args.language, args.batch, args.small_crop)
